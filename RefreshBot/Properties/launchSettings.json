@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "RefreshBot": {
+      "commandName": "Project"
+    },
+    "Docker": {
+      "commandName": "Docker"
+    }
+  }
+}

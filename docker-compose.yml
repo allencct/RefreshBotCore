@@ -1,0 +1,39 @@
+version: '3.4'
+
+services:
+  refreshbot:
+    image: ${DOCKER_REGISTRY-}refreshbot
+    build:
+      context: .
+      dockerfile: RefreshBot/Dockerfile
+
+  refreshweb:
+    image: ${DOCKER_REGISTRY-}refreshweb
+    build:
+      context: .
+      dockerfile: RefreshWeb/Dockerfile
+
+  db:
+    image: postgres:13.1-alpine
+    container_name: refresh-db
+    ports:
+      - "5432:5432"
+    environment:
+     POSTGRES_PASSWORD: password
+     POSTGRES_DB: refresh
+    volumes:
+      - refresh-data:/var/lib/postgresql/data
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    ports:
+      - "5050:80"
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=allen@tsai.com
+      - PGADMIN_DEFAULT_PASSWORD=password
+    volumes:
+      - refresh-data:/var/lib/pgadmin/data
+
+volumes:
+  refresh-data:
