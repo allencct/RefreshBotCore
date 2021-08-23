@@ -3,7 +3,7 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace RefreshWeb.Migrations
 {
-    public partial class Initial : Migration
+    public partial class TargetPage : Migration
     {
         protected override void Up(MigrationBuilder migrationBuilder)
         {
@@ -13,8 +13,9 @@ namespace RefreshWeb.Migrations
                 {
                     Id = table.Column<int>(type: "integer", nullable: false)
                         .Annotation("Npgsql:ValueGenerationStrategy", NpgsqlValueGenerationStrategy.IdentityByDefaultColumn),
-                    Active = table.Column<bool>(type: "boolean", nullable: false),
-                    Url = table.Column<string>(type: "text", nullable: true)
+                    IsActive = table.Column<bool>(type: "boolean", nullable: false),
+                    Url = table.Column<string>(type: "text", nullable: false),
+                    Channel = table.Column<decimal>(type: "numeric(20,0)", nullable: false)
                 },
                 constraints: table =>
                 {

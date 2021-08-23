@@ -1,3 +1,6 @@
+using Hangfire;
+using Hangfire.Console;
+using Hangfire.PostgreSql;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HttpsPolicy;
@@ -7,6 +10,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using RefreshWeb.DataAccess;
+using RefreshWeb.Jobs;
+using RefreshWeb.Services;
 
 namespace RefreshWeb
 {
@@ -22,7 +27,16 @@ namespace RefreshWeb
         // This method gets called by the runtime. Use this method to add services to the container.
         public void ConfigureServices(IServiceCollection services)
         {
+            services.AddTransient<DataService, DataService>();
+
             services.AddDbContext<EntityContext>(options => options.UseNpgsql("Host=localhost;Port=5432;Database=refresh;Username=postgres;Password=password"));
+
+            //services.AddHangfire(config =>
+            //{
+            //    config.UsePostgreSqlStorage("Host=host.docker.internal;Port=5432;Database=refresh;Username=postgres;Password=password");
+            //    config.UseConsole();
+            //});
+            //services.AddHangfireServer();
 
             services.AddControllersWithViews();
 
@@ -53,11 +67,22 @@ namespace RefreshWeb
 
             app.UseRouting();
 
+            //app.UseHangfireDashboard();
+            //app.UseHangfireDashboard(options: new DashboardOptions
+            //{
+            //    Authorization = new[] { new DashboardNoAuthorizationFilter() },
+            //    //AppPath = "/"
+            //});
+            //app.UseHangfireServer();
+            //RecurringJob.AddOrUpdate<CheckTargetJob>("check-targets", j => j.ExecuteAsync(null), Cron.Minutely());
+
             app.UseEndpoints(endpoints =>
             {
-                endpoints.MapControllerRoute(
-                    name: "default",
-                    pattern: "{controller}/{action=Index}/{id?}");
+                endpoints.MapDefaultControllerRoute();
+                //endpoints.MapControllerRoute(
+                //    name: "default",
+                //    pattern: "{controller}/{action=Index}/{id?}");
+                //endpoints.MapHangfireDashboard();
             });
 
             app.UseSpa(spa =>

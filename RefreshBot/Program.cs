@@ -4,6 +4,9 @@ using System.Threading.Tasks;
 using Discord;
 using Discord.Addons.Hosting;
 using Discord.WebSocket;
+using Hangfire;
+using Hangfire.PostgreSql;
+using Hangfire.Storage;
 //using Interactivity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +15,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 //using Microsoft.Extensions.Logging;
 using RefreshBot.DataAccess;
+using RefreshBot.Jobs;
+using RefreshBot.Options;
 using RefreshBot.Services;
 
 namespace RefreshBot
@@ -62,17 +67,50 @@ namespace RefreshBot
                 .UseCommandService()
                 .ConfigureServices((context, services) =>
                 {
+                    services.AddOptions()
+                        .Configure<PageOptions>(context.Configuration.GetSection("Page"));
+
                     services
                         .AddHostedService<CommandHandler>();
                     services.AddEntityFrameworkNpgsql().AddDbContext<EntityContext>(options => options.UseNpgsql("Host=host.docker.internal;Port=5432;Database=refresh;Username=postgres;Password=password"));
-                });
-                //.UseConsoleLifetime();
 
-            var host = builder.Build();
-            using (host)
+                    services.AddHangfire(config =>
+                    {
+                        config.UsePostgreSqlStorage("Host=host.docker.internal;Port=5432;Database=refresh;Username=postgres;Password=password");
+                    });
+                    services.AddHangfireServer();
+                });
+
+
+            GlobalConfiguration.Configuration.UsePostgreSqlStorage("Host=host.docker.internal;Port=5432;Database=refresh;Username=postgres;Password=password");
+
+            
+            //.UseConsoleLifetime();
+            using (var server = new BackgroundJobServer())
             {
-                await host.RunAsync();
+                using (var connection = JobStorage.Current.GetConnection())
+                {
+                    foreach (var recurringJob in StorageConnectionExtensions.GetRecurringJobs(connection))
+                    {
+                        RecurringJob.RemoveIfExists(recurringJob.Id);
+                    }
+                }
+                BackgroundJob.Enqueue(() => Console.WriteLine("Hello Hangfire!"));
+                //BackgroundJob.Enqueue<CheckTargetJob>(j => j.ExecuteAsync());
+                //RecurringJob.RemoveIfExists("check-targets");
+                RecurringJob.AddOrUpdate<CheckTargetJob>("check-targets", j => j.ExecuteAsync(), Cron.Minutely());
+
+                var host = builder.Build();
+                using (host)
+                {
+
+                    await host.RunAsync();
+                    //using var server = new BackgroundJobServer();
+
+                }
+
             }
+
         }
     }
 }

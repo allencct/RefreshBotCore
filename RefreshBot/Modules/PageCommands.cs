@@ -12,12 +12,17 @@ using PuppeteerSharp;
 using RefreshBot.DataAccess;
 using RefreshBot.Models;
 using Microsoft.Extensions.DependencyInjection;
+using System.IO;
+using Microsoft.Extensions.Options;
+using RefreshBot.Options;
 
 namespace RefreshBotCore.Modules
 {
-    public class ExampleCommands : ModuleBase
+    public class PageCommands : ModuleBase
     {
+        private readonly PageOptions _options;
         private readonly EntityContext _entityContext;
+
 
         //public ExampleCommands(EntityContext entityContext)
         //{
@@ -25,14 +30,31 @@ namespace RefreshBotCore.Modules
         //}
         //private readonly EntityContext _entityContext;
 
-        public ExampleCommands(IServiceProvider serviceProvider)
+        public PageCommands(IOptions<PageOptions> options, EntityContext entityContext)
         {
-            _entityContext = serviceProvider.GetRequiredService<EntityContext>();
+
+            _options = options.Value;
+            _entityContext = entityContext;
         }
 
-        [Command("refresh")]
-        public async Task RefreshCommand()
+        [Command("add")]
+        public async Task RefreshCommand([Remainder][Summary("The url of target to add")] string url)
         {
+            url = url.Trim();
+            if (string.IsNullOrEmpty(url))
+            {
+                await ReplyAsync("URL cannot be empty.");
+                return;
+            }
+
+            var channelId = Context.Channel.Id;
+            var matching = await _entityContext.TargetPages.SingleOrDefaultAsync(t => t.IsActive && t.Url == url && t.Channel == channelId);
+            if (matching != null)
+            {
+                await ReplyAsync("Matching URL already found.");
+                return;
+            }
+
             await new BrowserFetcher().DownloadAsync(BrowserFetcher.DefaultChromiumRevision);
             var options = new LaunchOptions()
             {
@@ -42,49 +64,76 @@ namespace RefreshBotCore.Modules
             };
             var browser = await Puppeteer.LaunchAsync(options);
             var page = await browser.NewPageAsync();
-            var url = "https://old.reddit.com/r/buildapcsales/new/";
+            await page.SetViewportAsync(new ViewPortOptions { Width = _options.Height, Height = _options.Width });
+            //await page.setViewport({ width: 1440, height: 2880});
+
             //await page.GoToAsync("https://old.reddit.com/r/buildapc/search/?q=ssd&sort=new&restrict_sr=on&t=all");
             await page.GoToAsync(url);
-            var stream = await page.ScreenshotStreamAsync();
-            var content = await page.GetContentAsync();
-            //Console.WriteLine(content);
-            //page.
-            //var image = new Image(stream);
-            //page.ScreenshotAsync
-            //new EmbedImage(image)
-            //var embed = new EmbedBuilder()
-            //{ Fields = }
-            //await page.ScreenshotAsync(outputFile);
-            //await ReplyAsync(embed: new EmbedImage();
-            //Context.Channel.SendMessageAsync
-            var targetPage = new TargetPage { Active = true, Url = url };
-            try
-            {
-                await _entityContext.TargetPages.AddAsync(targetPage);
-                await _entityContext.SaveChangesAsync();
-            }
-            catch (Exception e)
-            {
+            var data = await page.ScreenshotDataAsync();
 
+            var targetPage = new TargetPage { IsActive = true, Url = url, Channel = Context.Channel.Id, Content = data };
+            await _entityContext.TargetPages.AddAsync(targetPage);
+            await _entityContext.SaveChangesAsync();
+
+            await Context.Channel.SendFileAsync(new MemoryStream(data), "screenshot.png");
+        }
+
+        [Command("list")]
+        public async Task ListCommand()
+        {
+            var channelId = Context.Channel.Id;
+            var matching = await _entityContext.TargetPages.ToAsyncEnumerable().Where(t => t.Channel == channelId && t.IsActive == true).ToListAsync();
+            if (!matching.Any())
+            {
+                await ReplyAsync("No urls found.");
+                return;
             }
 
+            var idLength = 3;
+            var maxUrlLength = matching.Max(m => m.Url.Length);
+            var border = $"+---+{"".PadRight(maxUrlLength, '-')}+\n";
+            var sb = new StringBuilder();
+            sb.Append("`");
+            sb.Append(border);
+            foreach(var match in matching)
+            {
+                sb.Append($"|{match.Id.ToString().PadRight(idLength)}|{match.Url.PadRight(maxUrlLength)}|\n");
+                sb.Append(border);
+            }
+            sb.Append("`");
+            await ReplyAsync(sb.ToString());
+        }
 
-            await Context.Channel.SendFileAsync(stream, "screenshot.png");
+        [Command("remove")]
+        public async Task RemoveCommand([Summary("The ID of target to remove")] string idStr)
+        {
+            if (string.IsNullOrEmpty(idStr))
+            {
+                await ReplyAsync("ID is required.");
+                return;
+            }
+            if (!int.TryParse(idStr, out var id))
+            {
+                await ReplyAsync("ID is not valid.");
+                return;
+            }
+
+            var target = await _entityContext.TargetPages.FindAsync(id);
+            if(target == null)
+                await ReplyAsync("Matching target not found.");
+
+            target.IsActive = false;
+            await _entityContext.SaveChangesAsync();
+
+            await ReplyAsync($"{target.Url} has been removed.");
         }
 
         [Command("show")]
         public async Task ShowCommand()
         {
-            try
-            {
-                var targets = await _entityContext.TargetPages.ToListAsync();
-                await ReplyAsync(targets.FirstOrDefault().Url);
+            var targets = await _entityContext.TargetPages.ToListAsync();
+            await ReplyAsync(targets.FirstOrDefault().Url);
 
-            }
-            catch (Exception e)
-            {
-
-            }
             await ReplyAsync("end");
 
             // send simple string reply

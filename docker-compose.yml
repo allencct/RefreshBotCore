@@ -29,6 +29,7 @@ services:
     container_name: pgadmin
     ports:
       - "5050:80"
+      - "5051:443"
     environment:
       - PGADMIN_DEFAULT_EMAIL=allen@tsai.com
       - PGADMIN_DEFAULT_PASSWORD=password
